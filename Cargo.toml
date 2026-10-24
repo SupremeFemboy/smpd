@@ -1,0 +1,16 @@
+[package]
+name = "smpd"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+layershellev = "0.19"
+wayland-client = "0.31"
+wgpu = "24.0"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
+ab_glyph = "0.2"
+font8x8 = "0.3"
+serde = { version = "1.0", features = ["derive"] }
+toml = "0.8"
+bytemuck = { version = "1.19", features = ["derive"] }
+pollster = "0.4"
