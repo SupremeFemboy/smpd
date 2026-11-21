@@ -52,6 +52,7 @@ struct SmpdApp {
     save_input: Option<String>,
     delete_confirm: Option<String>,
     overwrite_confirm: Option<String>,
+    notification: Option<(String, Instant)>,
     modifiers: ModifiersState,
 
     render_state: Option<RenderState>,
@@ -104,6 +105,7 @@ impl SmpdApp {
             save_input: None,
             delete_confirm: None,
             overwrite_confirm: None,
+            notification: None,
             modifiers: ModifiersState::default(),
             render_state: None,
             loader: None,
@@ -429,7 +431,9 @@ Controls:
   [Space]               Toggle play / pause (in Queue mode)
   [Enter]               Play track / Load playlist / Open folder
   [a]                   Add focused folder or file to active queue (in Folders mode)
-  [Backspace / u]       Go up one directory level (in Folders mode)
+  [A]                   Add entire current directory to active queue (in Folders mode)
+  [Backspace]           Go up one directory level (in Folders mode)
+  [u]                   Update MPD database (mpc update)
   [C / x]               Clear current active queue (in Queue mode)
   [s]                   Save current active queue as a new playlist
   [c]                   Center on currently playing track (in Queue mode)
@@ -631,7 +635,20 @@ fn main() {
                         app.current_scroll = app.target_scroll;
                     }
 
-                    // Ensure smooth animation and continue refreshing while textures are loading
+                    // Check active notification expiration
+                    let has_active_notification = if let Some((_, time)) = &app.notification {
+                        if time.elapsed().as_secs_f32() > 2.5 {
+                            app.notification = None;
+                            app.overlay_dirty = true;
+                            false
+                        } else {
+                            true
+                        }
+                    } else {
+                        false
+                    };
+
+                    // Ensure smooth animation and continue refreshing while textures are loading or notification is visible
                     let has_missing_visible_textures = (center.saturating_sub(4)
                         ..=(center + 4).min(count.saturating_sub(1)))
                         .any(|i| match mode {
@@ -640,7 +657,7 @@ fn main() {
                             AppMode::Folders => !r_state.browser_texture_cache.contains_key(&i),
                         });
 
-                    if (is_animating || has_missing_visible_textures)
+                    if (is_animating || has_missing_visible_textures || has_active_notification)
                         && let Some(id) = unit_id
                     {
                         state.request_refresh(id, RefreshRequest::NextFrame);
@@ -695,6 +712,7 @@ fn main() {
                             app.save_input.as_deref(),
                             app.delete_confirm.as_deref(),
                             app.overwrite_confirm.as_deref(),
+                            app.notification.as_ref().map(|(msg, _)| msg.as_str()),
                             app.status.state,
                             &app.config,
                             &app.font_mgr,
@@ -1329,11 +1347,25 @@ fn main() {
                             }
                         }
 
-                        // U or Backspace: Go up directory in Folders mode
-                        PhysicalKey::Code(KeyCode::KeyU)
-                        | PhysicalKey::Code(KeyCode::Backspace)
-                            if app.mode == AppMode::Folders =>
-                        {
+                        // U: Trigger MPD database update (mpc update)
+                        PhysicalKey::Code(KeyCode::KeyU) => {
+                            let _ = app.mpd.update_database(None);
+                            app.refresh_status();
+                            match app.mode {
+                                AppMode::Queue => app.reload_playlist(),
+                                AppMode::Playlists => app.reload_stored_playlists(),
+                                AppMode::Folders => app.reload_browser_items(),
+                            }
+                            app.notification =
+                                Some(("Updating MPD database...".to_string(), Instant::now()));
+                            app.overlay_dirty = true;
+                            if let Some(id) = unit_id {
+                                state.request_refresh(id, RefreshRequest::NextFrame);
+                            }
+                        }
+
+                        // Backspace: Go up directory in Folders mode
+                        PhysicalKey::Code(KeyCode::Backspace) if app.mode == AppMode::Folders => {
                             let parent = Path::new(&app.browser_dir)
                                 .parent()
                                 .and_then(|p| p.to_str())

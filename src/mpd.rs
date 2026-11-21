@@ -505,6 +505,24 @@ impl MpdClient {
         Ok(())
     }
 
+    /// Triggers an MPD database update (`mpc update`).
+    pub fn update_database(&mut self, uri: Option<&str>) -> Result<u32, String> {
+        let cmd = match uri {
+            Some(u) => format!("update \"{}\"", escape_param(u)),
+            None => "update".to_string(),
+        };
+        let lines = self.send_command(&cmd)?;
+        let mut job_id = 0;
+        for l in lines {
+            if let Some(id_str) = l.strip_prefix("updating_db: ")
+                && let Ok(id) = id_str.parse::<u32>()
+            {
+                job_id = id;
+            }
+        }
+        Ok(job_id)
+    }
+
     /// Lists subdirectories and audio files in a given directory in the MPD music library.
     pub fn list_directory(&mut self, dir: &str) -> Result<Vec<BrowserItem>, String> {
         let escaped = escape_param(dir);

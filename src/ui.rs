@@ -361,6 +361,7 @@ pub fn render_ui_overlay(
     save_input: Option<&str>,
     delete_confirm: Option<&str>,
     overwrite_confirm: Option<&str>,
+    notification: Option<&str>,
     state: PlayState,
     config: &Config,
     font_mgr: &FontManager,
@@ -540,6 +541,48 @@ pub fn render_ui_overlay(
                 font_size,
                 text_dim,
             );
+        } else if let Some(note) = notification {
+            // Notification toast pill
+            let prompt_text = "\u{f021}  ";
+            let full_line = format!("{}{}", prompt_text, note);
+            let (text_w, text_h) = get_text_dimensions(font_mgr, &full_line, font_size);
+
+            let top_y = 52i32;
+            let pill_w = (text_w as i32 + 64).max(380);
+            let pill_h = (text_h as i32 + 24).max(46);
+            let top_center_x = (screen_w / 2) as i32;
+
+            draw_slanted_pill(
+                &mut img,
+                top_center_x,
+                top_y,
+                pill_w,
+                pill_h,
+                pill_bg,
+                pill_border,
+                2.0,
+            );
+
+            let start_x = top_center_x as f32 - (text_w * 0.5);
+
+            let x1 = render_text(
+                &mut img,
+                font_mgr,
+                prompt_text,
+                start_x,
+                top_y as f32,
+                font_size,
+                text_accent,
+            );
+            render_text(
+                &mut img,
+                font_mgr,
+                note,
+                x1,
+                top_y as f32,
+                font_size,
+                text_white,
+            );
         } else {
             let (tab1_str, tab1_act, tab2_str, tab2_act, tab3_str, tab3_act, icon, display_str) =
                 match mode {
@@ -712,13 +755,13 @@ pub fn render_ui_overlay(
         } else {
             match mode {
                 AppMode::Queue => {
-                    "\u{f048} h/<- Prev   \u{f051} l/-> Next   \u{f04c} Space Pause   \u{f04b} Enter Play   \u{f014} C/x Clear   \u{f0c7} s Save   1/2/3 Mode   \u{f00d} Esc Exit"
+                    "\u{f048} h/<- Prev   \u{f051} l/-> Next   \u{f04c} Space Pause   \u{f04b} Enter Play   \u{f014} C/x Clear   \u{f0c7} s Save   \u{f021} u Update   1/2/3 Mode   \u{f00d} Esc Exit"
                 }
                 AppMode::Playlists => {
-                    "\u{f048} h/<- Prev   \u{f051} l/-> Next   \u{f04b} Enter Load   \u{f014} d Delete   \u{f0c7} s Save   1/2/3 Mode   \u{f00d} Esc Exit"
+                    "\u{f048} h/<- Prev   \u{f051} l/-> Next   \u{f04b} Enter Load   \u{f014} d Delete   \u{f0c7} s Save   \u{f021} u Update   1/2/3 Mode   \u{f00d} Esc Exit"
                 }
                 AppMode::Folders => {
-                    "\u{f048} h/<- Prev   \u{f051} l/-> Next   Enter Open   \u{f067} a Add   \u{f067} A Add Dir   Backspace Up   1/2/3 Mode   \u{f00d} Esc Exit"
+                    "\u{f048} h/<- Prev   \u{f051} l/-> Next   Enter Open   \u{f067} a Add   \u{f067} A Add Dir   Backspace Up   \u{f021} u Update   1/2/3 Mode   \u{f00d} Esc Exit"
                 }
             }
         };
@@ -787,6 +830,7 @@ mod tests {
             None,
             None,
             None,
+            None,
             PlayState::Play,
             &config,
             &font_mgr,
@@ -813,6 +857,7 @@ mod tests {
             ('\u{f0c7}', "nf-fa-save"),
             ('\u{f067}', "nf-fa-plus"),
             ('\u{f014}', "nf-fa-trash"),
+            ('\u{f021}', "nf-fa-refresh"),
         ];
 
         for (ch, desc) in test_chars {

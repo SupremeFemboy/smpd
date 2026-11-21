@@ -47,7 +47,8 @@
 | <kbd>d</kbd> / <kbd>Delete</kbd> | Mode 2 | **Delete saved playlist with confirmation** (<kbd>y</kbd>/<kbd>Enter</kbd>, <kbd>n</kbd>/<kbd>Esc</kbd>) |
 | <kbd>a</kbd> | Mode 3 | Add focused item (folder or file) to active queue |
 | <kbd>A</kbd> (Shift+A) | Mode 3 | **Add entire current directory to active queue** |
-| <kbd>Backspace</kbd> / <kbd>u</kbd> | Mode 3 | Navigate up one directory level (`..`) |
+| <kbd>Backspace</kbd> | Mode 3 | Navigate up one directory level (`..`) |
+| <kbd>u</kbd> | Global | **Update MPD database** (`mpc update`) |
 | <kbd>←</kbd> / <kbd>→</kbd> or <kbd>h</kbd> / <kbd>l</kbd> | Global | Navigate carousel left / right |
 | <kbd>Home</kbd> / <kbd>End</kbd> | Global | Jump to first / last item in carousel |
 | <kbd>Mouse Scroll</kbd> | Global | Smooth scroll carousel horizontally |
@@ -137,7 +138,8 @@ close_on_select = false
 | <kbd>d</kbd> / <kbd>Delete</kbd> | Режим 2 | **Удалить плейлист с подтверждением** (<kbd>y</kbd>/<kbd>Enter</kbd>, <kbd>n</kbd>/<kbd>Esc</kbd>) |
 | <kbd>a</kbd> | Режим 3 | Добавить выбранный элемент (папку/файл) в очередь |
 | <kbd>A</kbd> (Shift+A) | Режим 3 | **Добавить всю текущую директорию в очередь сразу** |
-| <kbd>Backspace</kbd> / <kbd>u</kbd> | Режим 3 | Подняться на уровень вверх по каталогам |
+| <kbd>Backspace</kbd> | Режим 3 | Подняться на уровень вверх по каталогам |
+| <kbd>u</kbd> | Глобально | **Обновить базу данных MPD** (`mpc update`) |
 | <kbd>←</kbd> / <kbd>→</kbd> или <kbd>h</kbd> / <kbd>l</kbd> | Глобально | Навигация по карусели |
 | <kbd>Home</kbd> / <kbd>End</kbd> | Глобально | Перейти к началу / концу карусели |
 | <kbd>Колесо мыши</kbd> | Глобально | Прокрутка карусели |
