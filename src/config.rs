@@ -103,7 +103,7 @@ pub struct UiConfig {
     #[serde(default = "default_true")]
     pub show_bottom_bar: bool,
 
-    #[serde(default)]
+    #[serde(default = "default_font_name")]
     pub font: Option<String>,
 
     #[serde(default)]
@@ -115,8 +115,21 @@ pub struct UiConfig {
 
 impl UiConfig {
     pub fn font_spec(&self) -> Option<&str> {
-        self.font.as_deref().or(self.font_path.as_deref())
+        self.font
+            .as_deref()
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .or(self
+                .font_path
+                .as_deref()
+                .map(|s| s.trim())
+                .filter(|s| !s.is_empty()))
+            .or(Some("monospace"))
     }
+}
+
+fn default_font_name() -> Option<String> {
+    Some("monospace".to_string())
 }
 
 fn default_true() -> bool {
@@ -132,7 +145,7 @@ impl Default for UiConfig {
         Self {
             show_top_bar: true,
             show_bottom_bar: true,
-            font: None,
+            font: default_font_name(),
             font_path: None,
             font_size: 20.0,
         }
@@ -304,7 +317,7 @@ impl Default for MpdConfig {
             password: None,
             music_directory: None,
             timeout_ms: default_timeout_ms(),
-            close_on_select: true,
+            close_on_select: false,
         }
     }
 }
@@ -333,10 +346,10 @@ show_top_bar = true
 # Show the bottom panel with keyboard controls
 show_bottom_bar = true
 
-# Font name/family (e.g. "DepartureMono Nerd Font", "sans-serif")
+# Font name/family (e.g. "monospace", "Noto Sans Mono", "JetBrains Mono")
 # or direct file path to a .ttf/.otf font file.
-# If empty or not found, built-in DepartureMono Nerd Font is used.
-font = ""
+# If empty or not found, system "monospace" font (or built-in bitmap font) is used.
+font = "monospace"
 
 # Font size in pixels
 font_size = 20.0

@@ -13,9 +13,6 @@ pub enum AppMode {
     Folders,
 }
 
-pub const DEPARTURE_MONO_NERD_FONT: &[u8] =
-    include_bytes!("../assets/DepartureMonoNerdFont-Regular.otf");
-
 pub struct FontManager {
     pub custom_font: Option<FontArc>,
 }
@@ -93,47 +90,43 @@ pub fn resolve_font(spec: &str) -> Option<PathBuf> {
 
 impl FontManager {
     pub fn new(font_spec: Option<&str>) -> Self {
-        let custom_font = font_spec
-            .and_then(|spec| {
-                let trimmed = spec.trim();
-                if trimmed.is_empty() {
-                    return None;
-                }
+        let requested = font_spec
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .unwrap_or("monospace");
 
-                match resolve_font(trimmed) {
-                    Some(resolved_path) => match std::fs::read(&resolved_path) {
-                        Ok(bytes) => match FontArc::try_from_vec(bytes) {
-                            Ok(font) => Some(font),
-                            Err(e) => {
-                                eprintln!(
-                                    "smpd: warning: failed to parse font at {}: {}",
-                                    resolved_path.display(),
-                                    e
-                                );
-                                None
-                            }
-                        },
-                        Err(e) => {
-                            eprintln!(
-                                "smpd: warning: could not read font at {}: {}",
-                                resolved_path.display(),
-                                e
-                            );
-                            None
-                        }
-                    },
-                    None => None,
-                }
-            })
-            .or_else(|| match FontArc::try_from_slice(DEPARTURE_MONO_NERD_FONT) {
-                Ok(font) => Some(font),
+        let load_font = |spec: &str| -> Option<FontArc> {
+            let path = resolve_font(spec)?;
+            match std::fs::read(&path) {
+                Ok(bytes) => match FontArc::try_from_vec(bytes) {
+                    Ok(font) => Some(font),
+                    Err(e) => {
+                        eprintln!(
+                            "smpd: warning: failed to parse font at {}: {}",
+                            path.display(),
+                            e
+                        );
+                        None
+                    }
+                },
                 Err(e) => {
                     eprintln!(
-                        "smpd: warning: failed to parse embedded DepartureMono Nerd Font: {e}"
+                        "smpd: warning: could not read font at {}: {}",
+                        path.display(),
+                        e
                     );
                     None
                 }
-            });
+            }
+        };
+
+        let custom_font = load_font(requested).or_else(|| {
+            if requested != "monospace" {
+                load_font("monospace")
+            } else {
+                None
+            }
+        });
 
         Self { custom_font }
     }
@@ -149,7 +142,7 @@ pub fn render_text(
     color: [u8; 4],
 ) -> f32 {
     if let Some(ref font) = font_mgr.custom_font {
-        let scale = PxScale::from(font_size * 1.35);
+        let scale = PxScale::from(font_size);
         let scaled_font = font.as_scaled(scale);
         let baseline_y = center_y + (scaled_font.ascent() + scaled_font.descent()) * 0.5;
         let mut last_glyph_id = None;
@@ -200,7 +193,7 @@ pub fn render_text(
         x
     } else {
         // Fallback to bitmap font
-        let scale = ((font_size * 1.35) / 8.0).round().max(1.0) as u32;
+        let scale = (font_size / 8.0).round().max(1.0) as u32;
         let mut cur_x = x as i32;
         let start_y = (center_y - (8.0 * scale as f32) * 0.5).round() as i32;
 
@@ -256,7 +249,7 @@ pub fn render_text(
 
 pub fn get_text_dimensions(font_mgr: &FontManager, text: &str, font_size: f32) -> (f32, f32) {
     if let Some(ref font) = font_mgr.custom_font {
-        let scale = PxScale::from(font_size * 1.35);
+        let scale = PxScale::from(font_size);
         let scaled_font = font.as_scaled(scale);
         let mut width = 0.0;
         let mut last_glyph_id = None;
@@ -275,11 +268,20 @@ pub fn get_text_dimensions(font_mgr: &FontManager, text: &str, font_size: f32) -
         let height = scaled_font.height();
         (width, height)
     } else {
-        let scale = ((font_size * 1.35) / 8.0).round().max(1.0) as u32;
+        let scale = (font_size / 8.0).round().max(1.0) as u32;
         let width = (text.chars().count() as u32 * 8 * scale) as f32;
         let height = (8 * scale) as f32;
         (width, height)
     }
+}
+
+pub fn get_icon<'a>(font: Option<&FontArc>, preferred: &'a str, fallback: &'a str) -> &'a str {
+    if let Some(f) = font
+        && preferred.chars().all(|c| f.glyph_id(c).0 != 0)
+    {
+        return preferred;
+    }
+    fallback
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -379,12 +381,27 @@ pub fn render_ui_overlay(
     let text_dim = config.colors.dim_text_color.to_rgba8();
 
     let font_size = config.ui.font_size;
+    let font_ref = font_mgr.custom_font.as_ref();
+
+    let ic_save = get_icon(font_ref, "\u{f0c7}", "[Save]");
+    let ic_trash = get_icon(font_ref, "\u{f014}", "[Del]");
+    let ic_play = get_icon(font_ref, "\u{f04b}", "▶");
+    let ic_pause = get_icon(font_ref, "\u{f04c}", "||");
+    let ic_stop = get_icon(font_ref, "\u{f04d}", "■");
+    let ic_music = get_icon(font_ref, "\u{f001}", "•");
+    let ic_playlist = get_icon(font_ref, "\u{f025}", "•");
+    let ic_folder = get_icon(font_ref, "\u{f07b}", "/");
+    let ic_refresh = get_icon(font_ref, "\u{f021}", "[Update]");
+    let ic_prev = get_icon(font_ref, "\u{f048}", "<-");
+    let ic_next = get_icon(font_ref, "\u{f051}", "->");
+    let ic_add = get_icon(font_ref, "\u{f067}", "+");
+    let ic_close = get_icon(font_ref, "\u{f00d}", "Esc");
 
     // 1. Top Header: [ Tabs / Modes   Active Item Information ] OR [ Save Prompt ] OR [ Delete Prompt ]
     if config.ui.show_top_bar {
         if let Some(del_name) = delete_confirm {
             // Interactive Delete Confirmation prompt
-            let prompt_text = "\u{f014}  Delete playlist '";
+            let prompt_text = format!("{}  Delete playlist '", ic_trash);
             let name_text = del_name;
             let hint_text = "'?   [y/Enter: Confirm]  [n/Esc: Cancel]";
             let full_line = format!("{}{}{}", prompt_text, name_text, hint_text);
@@ -411,7 +428,7 @@ pub fn render_ui_overlay(
             let x1 = render_text(
                 &mut img,
                 font_mgr,
-                prompt_text,
+                &prompt_text,
                 start_x,
                 top_y as f32,
                 font_size,
@@ -437,7 +454,7 @@ pub fn render_ui_overlay(
             );
         } else if let Some(ovw_name) = overwrite_confirm {
             // Interactive Overwrite Confirmation prompt
-            let prompt_text = "\u{f0c7}  Playlist '";
+            let prompt_text = format!("{}  Playlist '", ic_save);
             let name_text = ovw_name;
             let hint_text = "' already exists. Overwrite?   [y/Enter: Confirm]  [n/Esc: Cancel]";
             let full_line = format!("{}{}{}", prompt_text, name_text, hint_text);
@@ -464,7 +481,7 @@ pub fn render_ui_overlay(
             let x1 = render_text(
                 &mut img,
                 font_mgr,
-                prompt_text,
+                &prompt_text,
                 start_x,
                 top_y as f32,
                 font_size,
@@ -490,7 +507,7 @@ pub fn render_ui_overlay(
             );
         } else if let Some(input_buf) = save_input {
             // Interactive Save Playlist Input prompt
-            let prompt_text = "\u{f0c7}  Save Playlist As: ";
+            let prompt_text = format!("{}  Save Playlist As: ", ic_save);
             let display_input = format!("{}_", input_buf);
             let hint_text = "   [Enter: Save, Esc: Cancel]";
             let full_line = format!("{}{}{}", prompt_text, display_input, hint_text);
@@ -517,7 +534,7 @@ pub fn render_ui_overlay(
             let x1 = render_text(
                 &mut img,
                 font_mgr,
-                prompt_text,
+                &prompt_text,
                 start_x,
                 top_y as f32,
                 font_size,
@@ -543,7 +560,7 @@ pub fn render_ui_overlay(
             );
         } else if let Some(note) = notification {
             // Notification toast pill
-            let prompt_text = "\u{f021}  ";
+            let prompt_text = format!("{}  ", ic_refresh);
             let full_line = format!("{}{}", prompt_text, note);
             let (text_w, text_h) = get_text_dimensions(font_mgr, &full_line, font_size);
 
@@ -568,7 +585,7 @@ pub fn render_ui_overlay(
             let x1 = render_text(
                 &mut img,
                 font_mgr,
-                prompt_text,
+                &prompt_text,
                 start_x,
                 top_y as f32,
                 font_size,
@@ -598,16 +615,16 @@ pub fn render_ui_overlay(
                         let (ic, display) = if let Some(track) = current_track {
                             let st_ic = if track.is_current {
                                 match state {
-                                    PlayState::Play => "\u{f04b}",
-                                    PlayState::Pause => "\u{f04c}",
-                                    PlayState::Stop => "\u{f04d}",
+                                    PlayState::Play => ic_play,
+                                    PlayState::Pause => ic_pause,
+                                    PlayState::Stop => ic_stop,
                                 }
                             } else {
-                                "\u{f001}"
+                                ic_music
                             };
                             (st_ic, format!("{} - {}", track.artist, track.title))
                         } else {
-                            ("\u{f001}", "No tracks in MPD playlist".to_string())
+                            (ic_music, "No tracks in MPD playlist".to_string())
                         };
 
                         (t1, true, t2, false, t3, false, ic, display)
@@ -623,11 +640,11 @@ pub fn render_ui_overlay(
 
                         let (ic, display) = if let Some(pl) = current_playlist {
                             (
-                                "\u{f025}",
+                                ic_playlist,
                                 format!("{} ({} tracks)", pl.name, pl.track_count),
                             )
                         } else {
-                            ("\u{f025}", "No saved playlists".to_string())
+                            (ic_playlist, "No saved playlists".to_string())
                         };
 
                         (t1, false, t2, true, t3, false, ic, display)
@@ -654,14 +671,14 @@ pub fn render_ui_overlay(
                         let (ic, display) = if let Some(item) = current_browser_item {
                             if item.is_dir {
                                 (
-                                    "\u{f07b}",
+                                    ic_folder,
                                     format!("{} ({} items)", item.name, item.item_count),
                                 )
                             } else {
-                                ("\u{f001}", item.name.clone())
+                                (ic_music, item.name.clone())
                             }
                         } else {
-                            ("\u{f07b}", "Empty folder".to_string())
+                            (ic_folder, "Empty folder".to_string())
                         };
 
                         (t1, false, t2, false, t3, true, ic, display)
@@ -747,26 +764,32 @@ pub fn render_ui_overlay(
     // 2. Bottom Footer: Navigation hints with Nerd Font icons
     if config.ui.show_bottom_bar {
         let footer_text = if delete_confirm.is_some() {
-            "Confirm deletion:   y / Enter : Delete playlist   n / Esc : Cancel"
+            "Confirm deletion:   y / Enter : Delete playlist   n / Esc : Cancel".to_string()
         } else if overwrite_confirm.is_some() {
-            "Confirm overwrite:   y / Enter : Overwrite playlist   n / Esc : Cancel"
+            "Confirm overwrite:   y / Enter : Overwrite playlist   n / Esc : Cancel".to_string()
         } else if save_input.is_some() {
-            "Type playlist name...   Enter : Confirm Save   Esc : Cancel"
+            "Type playlist name...   Enter : Confirm Save   Esc : Cancel".to_string()
         } else {
             match mode {
                 AppMode::Queue => {
-                    "\u{f048} h/<- Prev   \u{f051} l/-> Next   \u{f04c} Space Pause   \u{f04b} Enter Play   \u{f014} C/x Clear   \u{f0c7} s Save   \u{f021} u Update   1/2/3 Mode   \u{f00d} Esc Exit"
+                    format!(
+                        "{ic_prev} h/<- Prev   {ic_next} l/-> Next   {ic_pause} Space Pause   {ic_play} Enter Play   {ic_trash} C/x Clear   {ic_save} s Save   {ic_refresh} u Update   1/2/3 Mode   {ic_close} Esc Exit"
+                    )
                 }
                 AppMode::Playlists => {
-                    "\u{f048} h/<- Prev   \u{f051} l/-> Next   \u{f04b} Enter Load   \u{f014} d Delete   \u{f0c7} s Save   \u{f021} u Update   1/2/3 Mode   \u{f00d} Esc Exit"
+                    format!(
+                        "{ic_prev} h/<- Prev   {ic_next} l/-> Next   {ic_play} Enter Load   {ic_trash} d Delete   {ic_save} s Save   {ic_refresh} u Update   1/2/3 Mode   {ic_close} Esc Exit"
+                    )
                 }
                 AppMode::Folders => {
-                    "\u{f048} h/<- Prev   \u{f051} l/-> Next   Enter Open   \u{f067} a Add   \u{f067} A Add Dir   Backspace Up   \u{f021} u Update   1/2/3 Mode   \u{f00d} Esc Exit"
+                    format!(
+                        "{ic_prev} h/<- Prev   {ic_next} l/-> Next   Enter Open   {ic_add} a Add   {ic_add} A Add Dir   Backspace Up   {ic_refresh} u Update   1/2/3 Mode   {ic_close} Esc Exit"
+                    )
                 }
             }
         };
 
-        let (footer_w, footer_h) = get_text_dimensions(font_mgr, footer_text, font_size * 0.85);
+        let (footer_w, footer_h) = get_text_dimensions(font_mgr, &footer_text, font_size * 0.85);
         let bot_y = (screen_h as i32 - 52).max(120);
         let bot_pill_w = footer_w as i32 + 64;
         let bot_pill_h = (footer_h as i32 + 20).max(42);
@@ -788,7 +811,7 @@ pub fn render_ui_overlay(
         render_text(
             &mut img,
             font_mgr,
-            footer_text,
+            &footer_text,
             bot_start_x,
             bot_y as f32,
             font_size * 0.85,
@@ -840,34 +863,22 @@ mod tests {
     }
 
     #[test]
-    fn test_render_nerd_font_glyph() {
+    fn test_font_icons_fallback() {
         let font_mgr = FontManager::new(None);
         let font = font_mgr.custom_font.as_ref().unwrap();
+
         let test_chars = [
-            ('\u{f04b}', "nf-fa-play"),
-            ('\u{f04c}', "nf-fa-pause"),
-            ('\u{f04d}', "nf-fa-stop"),
-            ('\u{f001}', "nf-fa-music"),
-            ('\u{f025}', "nf-fa-headphones"),
-            ('\u{f051}', "nf-fa-step_forward"),
-            ('\u{f048}', "nf-fa-step_backward"),
-            ('\u{f00d}', "nf-fa-close"),
-            ('\u{f058}', "nf-fa-check_circle"),
-            ('\u{f07b}', "nf-fa-folder"),
-            ('\u{f0c7}', "nf-fa-save"),
-            ('\u{f067}', "nf-fa-plus"),
-            ('\u{f014}', "nf-fa-trash"),
-            ('\u{f021}', "nf-fa-refresh"),
+            ('▶', "play triangle U+25B6"),
+            ('■', "black square U+25A0"),
+            ('•', "bullet U+2022"),
+            ('/', "slash"),
+            ('|', "bar"),
         ];
 
         for (ch, desc) in test_chars {
-            let glyph_id = font.glyph_id(ch);
-            println!(
-                "{desc} '\\u{{{:x}}}': glyph_id = {:?}, valid = {}",
-                ch as u32,
-                glyph_id,
-                glyph_id.0 != 0
-            );
+            let gid = font.glyph_id(ch);
+            println!("{desc} '{ch}': gid = {:?}, valid = {}", gid, gid.0 != 0);
+            assert!(gid.0 != 0);
         }
     }
 }
